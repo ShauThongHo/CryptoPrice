@@ -2,7 +2,7 @@ import { dbOperations } from '../db/db';
 
 // Backend API Configuration
 const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true';
-const BACKEND_API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://192.168.0.88:3000';
+const BACKEND_API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 const FALLBACK_TO_COINGECKO = import.meta.env.VITE_FALLBACK_TO_COINGECKO === 'true';
 
 // CoinGecko API endpoints (free tier)
