@@ -25,7 +25,13 @@ import {
   deleteAsset,
   // Sync operations
   getFullSyncState,
-  replaceFullSyncState
+  replaceFullSyncState,
+  // Portfolio history operations
+  insertPortfolioSnapshot,
+  getPortfolioHistory,
+  getRecentPortfolioHistory,
+  getPortfolioHistoryCount,
+  cleanupOldPortfolioHistory
 } from './db.js';
 import { updatePrices, getTrackedCoins } from './fetcher.js';
 
@@ -222,6 +228,87 @@ app.get('/db/stats', (req, res) => {
     });
   }
 });
+
+// Portfolio History endpoints
+app.get('/portfolio/history', (req, res) => {
+  try {
+    const { start, end, hours } = req.query;
+    
+    let history;
+    if (hours) {
+      // Get recent history by hours
+      history = getRecentPortfolioHistory(parseInt(hours));
+    } else if (start && end) {
+      // Get history by time range
+      history = getPortfolioHistory(parseInt(start), parseInt(end));
+    } else {
+      // Default: last 24 hours
+      history = getRecentPortfolioHistory(24);
+    }
+    
+    res.json({
+      success: true,
+      count: history.length,
+      data: history,
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.post('/portfolio/history', (req, res) => {
+  try {
+    const { timestamp, totalValue, snapshotData } = req.body;
+    
+    if (!timestamp || totalValue === undefined || !snapshotData) {
+      return res.status(400).json({
+        success: false,
+        error: 'timestamp, totalValue, and snapshotData are required'
+      });
+    }
+    
+    const success = insertPortfolioSnapshot(timestamp, totalValue, snapshotData);
+    
+    if (success) {
+      res.json({
+        success: true,
+        message: 'Portfolio snapshot saved',
+        timestamp: Date.now()
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to save portfolio snapshot'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.get('/portfolio/history/count', (req, res) => {
+  try {
+    const count = getPortfolioHistoryCount();
+    res.json({
+      success: true,
+      count,
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 
 // Phase 3: Fetcher management endpoints
 app.get('/coins', (req, res) => {

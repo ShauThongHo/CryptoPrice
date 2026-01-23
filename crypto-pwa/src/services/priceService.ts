@@ -514,11 +514,36 @@ export class PriceService {
         totalValue += value;
       }
 
-      // Save snapshot
-      await dbOperations.savePortfolioSnapshot(totalValue, {
+      const snapshotData = {
         wallets: walletValues,
         coins: coinData,
-      });
+      };
+
+      // Save to local database
+      await dbOperations.savePortfolioSnapshot(totalValue, snapshotData);
+
+      // Sync to backend if enabled
+      if (USE_BACKEND && BACKEND_API_BASE) {
+        try {
+          const response = await fetch(`${BACKEND_API_BASE}/portfolio/history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              timestamp: Date.now(),
+              totalValue,
+              snapshotData: JSON.stringify(snapshotData)
+            })
+          });
+
+          if (response.ok) {
+            console.log('[priceService] Portfolio snapshot synced to backend');
+          } else {
+            console.warn('[priceService] Failed to sync portfolio snapshot:', response.statusText);
+          }
+        } catch (error) {
+          console.warn('[priceService] Backend sync error (non-critical):', error);
+        }
+      }
     } catch (error) {
       console.error('Error saving portfolio snapshot:', error);
     }

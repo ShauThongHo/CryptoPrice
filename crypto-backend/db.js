@@ -14,7 +14,8 @@ const db = {
         price_history: [],
         latest_prices: {},
         wallets: [],
-        assets: []
+        assets: [],
+        portfolio_history: []  // New: Portfolio snapshots
     },
 
     // Load data from disk
@@ -394,4 +395,82 @@ export function replaceFullSyncState(data) {
 export function closeDatabase() {
   console.log('[DB] Saving final state...');
   db.save();
+}
+
+// ===================================
+// Portfolio History Operations
+// ===================================
+
+/**
+ * Insert portfolio snapshot
+ */
+export function insertPortfolioSnapshot(timestamp, totalValue, snapshotData) {
+  try {
+    const record = {
+      id: Date.now(), // Simple ID
+      timestamp: timestamp,
+      total_value: totalValue,
+      snapshot_data: snapshotData // JSON string
+    };
+    
+    db.data.portfolio_history.push(record);
+    
+    // Auto-prune: Keep only last 90 days
+    const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+    db.data.portfolio_history = db.data.portfolio_history.filter(
+      row => row.timestamp >= ninetyDaysAgo
+    );
+    
+    db.save();
+    return true;
+  } catch (error) {
+    console.error('[DB] Error inserting portfolio snapshot:', error);
+    return false;
+  }
+}
+
+/**
+ * Get portfolio history within time range
+ */
+export function getPortfolioHistory(startTime, endTime, limit = 10000) {
+  return db.data.portfolio_history
+    .filter(row => row.timestamp >= startTime && row.timestamp <= endTime)
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .slice(0, limit);
+}
+
+/**
+ * Get recent portfolio history
+ */
+export function getRecentPortfolioHistory(hours) {
+  const startTime = Date.now() - (hours * 60 * 60 * 1000);
+  return db.data.portfolio_history
+    .filter(row => row.timestamp >= startTime)
+    .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+/**
+ * Get portfolio history count
+ */
+export function getPortfolioHistoryCount() {
+  return db.data.portfolio_history.length;
+}
+
+/**
+ * Clean up old portfolio history (keep last N days)
+ */
+export function cleanupOldPortfolioHistory(daysToKeep = 90) {
+  const cutoffTimestamp = Date.now() - (daysToKeep * 24 * 60 * 60 * 1000);
+  const before = db.data.portfolio_history.length;
+  db.data.portfolio_history = db.data.portfolio_history.filter(
+    row => row.timestamp >= cutoffTimestamp
+  );
+  const after = db.data.portfolio_history.length;
+  
+  if (before !== after) {
+    db.save();
+    console.log(`[DB] Cleaned up portfolio history: ${before - after} old records removed`);
+  }
+  
+  return before - after;
 }
