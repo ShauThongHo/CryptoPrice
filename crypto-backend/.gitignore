@@ -8,5 +8,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Frontend build
-dist/
+# Frontend build (now tracked in Git for easy deployment)
+# dist/
