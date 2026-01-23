@@ -43,6 +43,42 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const FETCH_INTERVAL = process.env.FETCH_INTERVAL || 5; // minutes
 
+// Simple in-memory rate limiter per endpoint
+const requestCounts = new Map(); // key: `${ip}:${endpoint}`, value: { count, resetTime }
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const RATE_LIMIT_MAX = 30; // Max 30 requests per minute per endpoint
+
+function rateLimitMiddleware(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress;
+  const endpoint = req.path;
+  const key = `${ip}:${endpoint}`;
+  const now = Date.now();
+  
+  let record = requestCounts.get(key);
+  
+  // Reset if window expired
+  if (!record || now > record.resetTime) {
+    record = { count: 0, resetTime: now + RATE_LIMIT_WINDOW };
+    requestCounts.set(key, record);
+  }
+  
+  // Check limit
+  if (record.count >= RATE_LIMIT_MAX) {
+    const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+    console.warn(`[RATE LIMIT] ${ip} exceeded limit for ${endpoint} (${record.count}/${RATE_LIMIT_MAX})`);
+    return res.status(429).json({
+      success: false,
+      error: 'Too many requests',
+      retryAfter,
+      message: `Rate limit exceeded. Please try again in ${retryAfter} seconds.`
+    });
+  }
+  
+  // Increment counter
+  record.count++;
+  next();
+}
+
 // Initialize database
 try {
   initDatabase();
@@ -167,6 +203,9 @@ updatePrices().then(async result => {
 app.use(cors({ origin: '*' })); // Allow all origins for LAN access
 app.use(express.json({ limit: '10mb' })); // Support large sync payloads
 
+// Apply rate limiting to all requests (except static files)
+app.use(rateLimitMiddleware);
+
 // Serve static files from React build (if available)
 const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));
@@ -174,8 +213,22 @@ console.log(`[STATIC] 📁 Serving frontend from: ${distPath}`);
 
 // Request logging middleware (after static to avoid logging static files)
 app.use((req, res, next) => {
+  // Skip logging for static assets
+  if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|woff|woff2|ttf|svg)$/)) {
+    return next();
+  }
+  
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.path}`);
+  const ip = req.ip || req.connection.remoteAddress;
+  console.log(`[${timestamp}] ${req.method} ${req.path} - ${ip}`);
+  
+  // Log response time
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[${timestamp}] ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+  });
+  
   next();
 });
 
@@ -341,9 +394,13 @@ app.get('/portfolio/history', (req, res) => {
       history = getRecentPortfolioHistory(24);
     }
     
+    // Get total count across all time
+    const totalCount = getPortfolioHistoryCount();
+    
     res.json({
       success: true,
       count: history.length,
+      totalCount: totalCount,  // Total snapshots in database
       data: history,
       timestamp: Date.now()
     });

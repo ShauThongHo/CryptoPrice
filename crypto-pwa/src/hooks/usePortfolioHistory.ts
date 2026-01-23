@@ -21,29 +21,22 @@ export function usePortfolioHistory(range: TimeRange) {
 
     setIsLoading(true);
     
-    // Fetch history data
-    Promise.all([
-      fetch(`${BACKEND_API_BASE}/portfolio/history?hours=${hours}`),
-      fetch(`${BACKEND_API_BASE}/portfolio/history/count`)
-    ])
-      .then(async ([historyResponse, countResponse]) => {
-        const historyResult = await historyResponse.json();
-        const countResult = await countResponse.json();
+    // Fetch history data (now includes totalCount in single request)
+    fetch(`${BACKEND_API_BASE}/portfolio/history?hours=${hours}`)
+      .then(async (response) => {
+        const result = await response.json();
         
-        if (historyResult.success && historyResult.data) {
+        if (result.success && result.data) {
           // Convert backend format to frontend format
-          const converted = historyResult.data.map((item: any) => ({
+          const converted = result.data.map((item: any) => ({
             id: item.id,
             timestamp: new Date(item.timestamp),
             totalValue: item.total_value,
             snapshotData: item.snapshot_data
           }));
           setHistory(converted);
-          console.log(`[usePortfolioHistory] Loaded ${converted.length} snapshots from backend`);
-        }
-        
-        if (countResult.success) {
-          setCount(countResult.count);
+          setCount(result.totalCount || result.count);  // Use totalCount from backend
+          console.log(`[usePortfolioHistory] Loaded ${converted.length} snapshots (${result.totalCount} total in DB)`);
         }
       })
       .catch((error) => {
