@@ -244,33 +244,68 @@
       "coin_id": "binancecoin",
       "price_usd": 886.25,
       "data_json": "{\"price_usd\":886.25,\"change_24h\":-0.6265400331770161,\"last_updated\":1769169870}"
+    },
+    {
+      "id": 1769170200507.2734,
+      "timestamp": 1769170200,
+      "coin_id": "bitcoin",
+      "price_usd": 89108,
+      "data_json": "{\"price_usd\":89108,\"change_24h\":-0.876977603777936,\"last_updated\":1769170150}"
+    },
+    {
+      "id": 1769170200508.3752,
+      "timestamp": 1769170200,
+      "coin_id": "ethereum",
+      "price_usd": 2933.68,
+      "data_json": "{\"price_usd\":2933.68,\"change_24h\":-1.6550726238387565,\"last_updated\":1769170145}"
+    },
+    {
+      "id": 1769170200521.1277,
+      "timestamp": 1769170200,
+      "coin_id": "crypto-com-chain",
+      "price_usd": 0.091571,
+      "data_json": "{\"price_usd\":0.091571,\"change_24h\":-0.6048048882885719,\"last_updated\":1769170145}"
+    },
+    {
+      "id": 1769170200549.044,
+      "timestamp": 1769170200,
+      "coin_id": "solana",
+      "price_usd": 127.34,
+      "data_json": "{\"price_usd\":127.34,\"change_24h\":-2.081940124709912,\"last_updated\":1769170151}"
+    },
+    {
+      "id": 1769170200563.453,
+      "timestamp": 1769170200,
+      "coin_id": "binancecoin",
+      "price_usd": 886.1,
+      "data_json": "{\"price_usd\":886.1,\"change_24h\":-0.6933276405781582,\"last_updated\":1769170144}"
     }
   ],
   "latest_prices": {
     "bitcoin": {
       "coin_id": "bitcoin",
-      "price_usd": 89099,
-      "last_updated": 1769169900
+      "price_usd": 89108,
+      "last_updated": 1769170200
     },
     "ethereum": {
       "coin_id": "ethereum",
-      "price_usd": 2933.9,
-      "last_updated": 1769169900
+      "price_usd": 2933.68,
+      "last_updated": 1769170200
     },
     "crypto-com-chain": {
       "coin_id": "crypto-com-chain",
-      "price_usd": 0.091441,
-      "last_updated": 1769169900
+      "price_usd": 0.091571,
+      "last_updated": 1769170200
     },
     "solana": {
       "coin_id": "solana",
-      "price_usd": 127.36,
-      "last_updated": 1769169900
+      "price_usd": 127.34,
+      "last_updated": 1769170200
     },
     "binancecoin": {
       "coin_id": "binancecoin",
-      "price_usd": 886.25,
-      "last_updated": 1769169900
+      "price_usd": 886.1,
+      "last_updated": 1769170200
     }
   },
   "wallets": [],
