@@ -63,7 +63,7 @@ updatePrices().then(result => {
 
 // Middleware
 app.use(cors({ origin: '*' })); // Allow all origins for LAN access
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Support large sync payloads
 
 // Serve static files from React build (if available)
 const distPath = path.join(__dirname, 'dist');

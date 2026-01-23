@@ -1,90 +1,54 @@
-import Database from 'better-sqlite3';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const DB_PATH = process.env.DB_PATH || join(__dirname, 'crypto.db');
+// The database file path
+const DB_FILE = join(__dirname, 'database.json');
 
-let db = null;
+// --- Core: Simple JSON Database Engine ---
+const db = {
+    data: {
+        price_history: [],
+        latest_prices: {},
+        wallets: [],
+        assets: []
+    },
+
+    // Load data from disk
+    load() {
+        try {
+            if (fs.existsSync(DB_FILE)) {
+                const raw = fs.readFileSync(DB_FILE, 'utf8');
+                const loaded = JSON.parse(raw);
+                // Merge to ensure schema compatibility
+                this.data = { ...this.data, ...loaded };
+            } else {
+                this.save(); // Initialize file
+            }
+        } catch (e) {
+            console.error('[DB] Load Error, resetting:', e);
+            this.save();
+        }
+    },
+
+    // Save data to disk
+    save() {
+        fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2));
+    }
+};
 
 /**
- * Initialize SQLite database and create tables if they don't exist
+ * Initialize JSON database
  */
 export function initDatabase() {
   try {
-    console.log(`[DB] Initializing database at: ${DB_PATH}`);
-    
-    // Open database connection
-    db = new Database(DB_PATH, { verbose: console.log });
-    
-    // Enable WAL mode for better concurrency
-    db.pragma('journal_mode = WAL');
-    
-    // Create price_history table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS price_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp INTEGER NOT NULL,
-        coin_id TEXT NOT NULL,
-        price_usd REAL NOT NULL,
-        data_json TEXT,
-        UNIQUE(timestamp, coin_id)
-      )
-    `);
-    
-    // Create index for faster queries
-    db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_price_history_coin_timestamp 
-      ON price_history(coin_id, timestamp DESC)
-    `);
-    
-    // Create latest_prices table (key-value store for instant access)
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS latest_prices (
-        coin_id TEXT PRIMARY KEY,
-        price_usd REAL NOT NULL,
-        last_updated INTEGER NOT NULL
-      )
-    `);
-    
-    // Create wallets table (for data sync)
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS wallets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        type TEXT NOT NULL CHECK(type IN ('hot', 'cold', 'exchange')),
-        exchange_name TEXT,
-        color TEXT,
-        created_at INTEGER NOT NULL
-      )
-    `);
-    
-    // Create assets table (for data sync)
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS assets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        wallet_id INTEGER NOT NULL,
-        symbol TEXT NOT NULL,
-        amount REAL NOT NULL,
-        tags TEXT,
-        notes TEXT,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE
-      )
-    `);
-    
-    // Create indexes for assets
-    db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_assets_wallet_id 
-      ON assets(wallet_id)
-    `);
-    
+    console.log(`[DB] Initializing JSON database at: ${DB_FILE}`);
+    db.load();
     console.log('[DB] ✅ Database initialized successfully');
-    console.log('[DB] Tables: price_history, latest_prices, wallets, assets');
-    
+    console.log(`[DB] Records: ${db.data.price_history.length} history, ${Object.keys(db.data.latest_prices).length} latest prices, ${db.data.wallets.length} wallets, ${db.data.assets.length} assets`);
     return db;
   } catch (error) {
     console.error('[DB] ❌ Database initialization failed:', error);
@@ -93,154 +57,122 @@ export function initDatabase() {
 }
 
 /**
- * Get database instance
+ * Get database instance (for compatibility)
  */
 export function getDatabase() {
-  if (!db) {
-    throw new Error('Database not initialized. Call initDatabase() first.');
-  }
   return db;
 }
 
 /**
- * Insert price data into price_history table
+ * Insert price data into price_history
  */
 export function insertPriceHistory(coinId, priceUsd, dataJson = null) {
-  const timestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
+  const record = {
+    id: Date.now() + Math.random(), 
+    timestamp: Math.floor(Date.now() / 1000),
+    coin_id: coinId,
+    price_usd: priceUsd,
+    data_json: dataJson 
+  };
+  db.data.price_history.push(record);
   
-  try {
-    const stmt = db.prepare(`
-      INSERT OR IGNORE INTO price_history (timestamp, coin_id, price_usd, data_json)
-      VALUES (?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(timestamp, coinId, priceUsd, dataJson);
-    return result.changes > 0;
-  } catch (error) {
-    console.error(`[DB] Error inserting price history for ${coinId}:`, error);
-    return false;
+  // Limit history to last 10000 records to prevent file bloat
+  if (db.data.price_history.length > 10000) {
+    db.data.price_history = db.data.price_history.slice(-10000);
   }
+  
+  db.save();
+  return true;
 }
 
 /**
  * Update or insert latest price
  */
 export function upsertLatestPrice(coinId, priceUsd) {
-  const timestamp = Math.floor(Date.now() / 1000);
-  
-  try {
-    const stmt = db.prepare(`
-      INSERT INTO latest_prices (coin_id, price_usd, last_updated)
-      VALUES (?, ?, ?)
-      ON CONFLICT(coin_id) DO UPDATE SET
-        price_usd = excluded.price_usd,
-        last_updated = excluded.last_updated
-    `);
-    
-    stmt.run(coinId, priceUsd, timestamp);
-    return true;
-  } catch (error) {
-    console.error(`[DB] Error upserting latest price for ${coinId}:`, error);
-    return false;
-  }
+  db.data.latest_prices[coinId] = {
+    coin_id: coinId,
+    price_usd: priceUsd,
+    last_updated: Math.floor(Date.now() / 1000)
+  };
+  db.save();
+  return true;
 }
 
 /**
  * Get all latest prices
  */
 export function getLatestPrices() {
-  try {
-    const stmt = db.prepare('SELECT * FROM latest_prices');
-    return stmt.all();
-  } catch (error) {
-    console.error('[DB] Error fetching latest prices:', error);
-    return [];
-  }
+  const result = [];
+  Object.values(db.data.latest_prices).forEach(item => {
+    result.push({
+      coin_id: item.coin_id,
+      price_usd: item.price_usd,
+      last_updated: item.last_updated
+    });
+  });
+  return result;
 }
 
 /**
  * Get price history for a specific coin
- * @param {string} coinId - Coin identifier
- * @param {number} limit - Number of records to return (default: 7 days * 288 records/day = 2016)
  */
 export function getPriceHistory(coinId, limit = 2016) {
-  try {
-    const stmt = db.prepare(`
-      SELECT timestamp, price_usd, data_json
-      FROM price_history
-      WHERE coin_id = ?
-      ORDER BY timestamp DESC
-      LIMIT ?
-    `);
-    
-    return stmt.all(coinId, limit);
-  } catch (error) {
-    console.error(`[DB] Error fetching price history for ${coinId}:`, error);
-    return [];
-  }
+  return db.data.price_history
+    .filter(row => row.coin_id === coinId)
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, limit)
+    .map(row => ({
+      timestamp: row.timestamp,
+      price_usd: row.price_usd,
+      data_json: row.data_json
+    }));
 }
 
 /**
  * Get price history for a specific coin within a time range
- * @param {string} coinId - Coin identifier
- * @param {number} startTime - Start timestamp (Unix seconds)
- * @param {number} endTime - End timestamp (Unix seconds)
  */
 export function getPriceHistoryRange(coinId, startTime, endTime) {
-  try {
-    const stmt = db.prepare(`
-      SELECT timestamp, price_usd, data_json
-      FROM price_history
-      WHERE coin_id = ? AND timestamp BETWEEN ? AND ?
-      ORDER BY timestamp ASC
-    `);
-    
-    return stmt.all(coinId, startTime, endTime);
-  } catch (error) {
-    console.error(`[DB] Error fetching price history range for ${coinId}:`, error);
-    return [];
-  }
+  return db.data.price_history
+    .filter(row => row.coin_id === coinId && row.timestamp >= startTime && row.timestamp <= endTime)
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .map(row => ({
+      timestamp: row.timestamp,
+      price_usd: row.price_usd,
+      data_json: row.data_json
+    }));
 }
 
 /**
  * Clean up old price history data (keep last N days)
- * @param {number} daysToKeep - Number of days to retain (default: 30)
  */
 export function cleanupOldHistory(daysToKeep = 30) {
   const cutoffTimestamp = Math.floor(Date.now() / 1000) - (daysToKeep * 24 * 60 * 60);
+  const before = db.data.price_history.length;
   
-  try {
-    const stmt = db.prepare('DELETE FROM price_history WHERE timestamp < ?');
-    const result = stmt.run(cutoffTimestamp);
-    
-    console.log(`[DB] Cleaned up ${result.changes} old price history records`);
-    return result.changes;
-  } catch (error) {
-    console.error('[DB] Error cleaning up old history:', error);
-    return 0;
+  db.data.price_history = db.data.price_history.filter(row => row.timestamp >= cutoffTimestamp);
+  
+  const removed = before - db.data.price_history.length;
+  if (removed > 0) {
+    db.save();
+    console.log(`[DB] Cleaned up ${removed} old price history records`);
   }
+  return removed;
 }
 
 /**
  * Get database statistics
  */
 export function getDatabaseStats() {
-  try {
-    const historyCount = db.prepare('SELECT COUNT(*) as count FROM price_history').get();
-    const latestCount = db.prepare('SELECT COUNT(*) as count FROM latest_prices').get();
-    const oldestRecord = db.prepare('SELECT MIN(timestamp) as oldest FROM price_history').get();
-    const newestRecord = db.prepare('SELECT MAX(timestamp) as newest FROM price_history').get();
-    
-    return {
-      historyRecords: historyCount.count,
-      latestPricesCount: latestCount.count,
-      oldestTimestamp: oldestRecord.oldest,
-      newestTimestamp: newestRecord.newest
-    };
-  } catch (error) {
-    console.error('[DB] Error fetching database stats:', error);
-    return null;
-  }
+  const timestamps = db.data.price_history.map(r => r.timestamp).filter(Boolean);
+  
+  return {
+    historyRecords: db.data.price_history.length,
+    latestPricesCount: Object.keys(db.data.latest_prices).length,
+    walletsCount: db.data.wallets.length,
+    assetsCount: db.data.assets.length,
+    oldestTimestamp: timestamps.length > 0 ? Math.min(...timestamps) : null,
+    newestTimestamp: timestamps.length > 0 ? Math.max(...timestamps) : null
+  };
 }
 
 // ==================== WALLET OPERATIONS ====================
@@ -250,103 +182,71 @@ export function getDatabaseStats() {
  */
 export function createWallet(name, type, exchangeName = null, color = null) {
   const createdAt = Math.floor(Date.now() / 1000);
+  const id = db.data.wallets.length > 0 ? Math.max(...db.data.wallets.map(w => w.id)) + 1 : 1;
   
-  try {
-    const stmt = db.prepare(`
-      INSERT INTO wallets (name, type, exchange_name, color, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(name, type, exchangeName, color, createdAt);
-    return { id: result.lastInsertRowid, name, type, exchangeName, color, createdAt };
-  } catch (error) {
-    console.error('[DB] Error creating wallet:', error);
-    throw error;
-  }
+  const wallet = {
+    id,
+    name,
+    type,
+    exchange_name: exchangeName,
+    color,
+    created_at: createdAt
+  };
+  
+  db.data.wallets.push(wallet);
+  db.save();
+  
+  return wallet;
 }
 
 /**
  * Get all wallets
  */
 export function getAllWallets() {
-  try {
-    const stmt = db.prepare('SELECT * FROM wallets ORDER BY created_at DESC');
-    return stmt.all();
-  } catch (error) {
-    console.error('[DB] Error fetching wallets:', error);
-    return [];
-  }
+  return [...db.data.wallets].sort((a, b) => b.created_at - a.created_at);
 }
 
 /**
  * Get wallet by ID
  */
 export function getWalletById(id) {
-  try {
-    const stmt = db.prepare('SELECT * FROM wallets WHERE id = ?');
-    return stmt.get(id);
-  } catch (error) {
-    console.error(`[DB] Error fetching wallet ${id}:`, error);
-    return null;
-  }
+  return db.data.wallets.find(w => w.id === parseInt(id)) || null;
 }
 
 /**
  * Update wallet
  */
 export function updateWallet(id, updates) {
-  try {
-    const fields = [];
-    const values = [];
-    
-    if (updates.name !== undefined) {
-      fields.push('name = ?');
-      values.push(updates.name);
-    }
-    if (updates.type !== undefined) {
-      fields.push('type = ?');
-      values.push(updates.type);
-    }
-    if (updates.exchangeName !== undefined) {
-      fields.push('exchange_name = ?');
-      values.push(updates.exchangeName);
-    }
-    if (updates.color !== undefined) {
-      fields.push('color = ?');
-      values.push(updates.color);
-    }
-    
-    if (fields.length === 0) return false;
-    
-    values.push(id);
-    const stmt = db.prepare(`UPDATE wallets SET ${fields.join(', ')} WHERE id = ?`);
-    const result = stmt.run(...values);
-    
-    return result.changes > 0;
-  } catch (error) {
-    console.error(`[DB] Error updating wallet ${id}:`, error);
-    throw error;
-  }
+  const index = db.data.wallets.findIndex(w => w.id === parseInt(id));
+  if (index === -1) return false;
+  
+  const wallet = db.data.wallets[index];
+  
+  if (updates.name !== undefined) wallet.name = updates.name;
+  if (updates.type !== undefined) wallet.type = updates.type;
+  if (updates.exchangeName !== undefined) wallet.exchange_name = updates.exchangeName;
+  if (updates.color !== undefined) wallet.color = updates.color;
+  
+  db.save();
+  return true;
 }
 
 /**
  * Delete wallet (cascades to assets)
  */
 export function deleteWallet(id) {
-  try {
-    // Delete associated assets first
-    const deleteAssets = db.prepare('DELETE FROM assets WHERE wallet_id = ?');
-    deleteAssets.run(id);
-    
-    // Delete wallet
-    const stmt = db.prepare('DELETE FROM wallets WHERE id = ?');
-    const result = stmt.run(id);
-    
-    return result.changes > 0;
-  } catch (error) {
-    console.error(`[DB] Error deleting wallet ${id}:`, error);
-    throw error;
-  }
+  const walletId = parseInt(id);
+  const walletIndex = db.data.wallets.findIndex(w => w.id === walletId);
+  if (walletIndex === -1) return false;
+  
+  // Delete associated assets
+  db.data.assets = db.data.assets.filter(a => a.wallet_id !== walletId);
+  
+  // Delete wallet
+  db.data.wallets.splice(walletIndex, 1);
+  
+  db.save();
+  return true;
 }
 
 // ==================== ASSET OPERATIONS ====================
@@ -356,116 +256,79 @@ export function deleteWallet(id) {
  */
 export function createAsset(walletId, symbol, amount, tags = null, notes = null) {
   const now = Math.floor(Date.now() / 1000);
+  const id = db.data.assets.length > 0 ? Math.max(...db.data.assets.map(a => a.id)) + 1 : 1;
   
-  try {
-    const stmt = db.prepare(`
-      INSERT INTO assets (wallet_id, symbol, amount, tags, notes, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    const result = stmt.run(walletId, symbol, amount, tags, notes, now, now);
-    return { id: result.lastInsertRowid, walletId, symbol, amount, tags, notes, createdAt: now, updatedAt: now };
-  } catch (error) {
-    console.error('[DB] Error creating asset:', error);
-    throw error;
-  }
+  const asset = {
+    id,
+    wallet_id: walletId,
+    symbol,
+    amount,
+    tags,
+    notes,
+    created_at: now,
+    updated_at: now
+  };
+  
+  db.data.assets.push(asset);
+  db.save();
+  
+  return asset;
 }
 
 /**
  * Get all assets
  */
 export function getAllAssets() {
-  try {
-    const stmt = db.prepare('SELECT * FROM assets ORDER BY created_at DESC');
-    return stmt.all();
-  } catch (error) {
-    console.error('[DB] Error fetching assets:', error);
-    return [];
-  }
+  return [...db.data.assets].sort((a, b) => b.created_at - a.created_at);
 }
 
 /**
  * Get assets by wallet ID
  */
 export function getAssetsByWallet(walletId) {
-  try {
-    const stmt = db.prepare('SELECT * FROM assets WHERE wallet_id = ? ORDER BY created_at DESC');
-    return stmt.all(walletId);
-  } catch (error) {
-    console.error(`[DB] Error fetching assets for wallet ${walletId}:`, error);
-    return [];
-  }
+  return db.data.assets
+    .filter(a => a.wallet_id === parseInt(walletId))
+    .sort((a, b) => b.created_at - a.created_at);
 }
 
 /**
  * Get asset by ID
  */
 export function getAssetById(id) {
-  try {
-    const stmt = db.prepare('SELECT * FROM assets WHERE id = ?');
-    return stmt.get(id);
-  } catch (error) {
-    console.error(`[DB] Error fetching asset ${id}:`, error);
-    return null;
-  }
+  return db.data.assets.find(a => a.id === parseInt(id)) || null;
 }
 
 /**
  * Update asset
  */
 export function updateAsset(id, updates) {
-  const updatedAt = Math.floor(Date.now() / 1000);
+  const index = db.data.assets.findIndex(a => a.id === parseInt(id));
+  if (index === -1) return false;
   
-  try {
-    const fields = [];
-    const values = [];
-    
-    if (updates.symbol !== undefined) {
-      fields.push('symbol = ?');
-      values.push(updates.symbol);
-    }
-    if (updates.amount !== undefined) {
-      fields.push('amount = ?');
-      values.push(updates.amount);
-    }
-    if (updates.tags !== undefined) {
-      fields.push('tags = ?');
-      values.push(updates.tags);
-    }
-    if (updates.notes !== undefined) {
-      fields.push('notes = ?');
-      values.push(updates.notes);
-    }
-    
-    if (fields.length === 0) return false;
-    
-    fields.push('updated_at = ?');
-    values.push(updatedAt);
-    values.push(id);
-    
-    const stmt = db.prepare(`UPDATE assets SET ${fields.join(', ')} WHERE id = ?`);
-    const result = stmt.run(...values);
-    
-    return result.changes > 0;
-  } catch (error) {
-    console.error(`[DB] Error updating asset ${id}:`, error);
-    throw error;
-  }
+  const asset = db.data.assets[index];
+  
+  if (updates.symbol !== undefined) asset.symbol = updates.symbol;
+  if (updates.amount !== undefined) asset.amount = updates.amount;
+  if (updates.tags !== undefined) asset.tags = updates.tags;
+  if (updates.notes !== undefined) asset.notes = updates.notes;
+  
+  asset.updated_at = Math.floor(Date.now() / 1000);
+  
+  db.save();
+  return true;
 }
 
 /**
  * Delete asset
  */
 export function deleteAsset(id) {
-  try {
-    const stmt = db.prepare('DELETE FROM assets WHERE id = ?');
-    const result = stmt.run(id);
-    
-    return result.changes > 0;
-  } catch (error) {
-    console.error(`[DB] Error deleting asset ${id}:`, error);
-    throw error;
-  }
+  const index = db.data.assets.findIndex(a => a.id === parseInt(id));
+  if (index === -1) return false;
+  
+  db.data.assets.splice(index, 1);
+  db.save();
+  
+  return true;
 }
 
 // ==================== SYNC OPERATIONS ====================
@@ -474,19 +337,11 @@ export function deleteAsset(id) {
  * Get full sync state (all wallets and assets)
  */
 export function getFullSyncState() {
-  try {
-    const wallets = getAllWallets();
-    const assets = getAllAssets();
-    
-    return {
-      wallets,
-      assets,
-      timestamp: Math.floor(Date.now() / 1000)
-    };
-  } catch (error) {
-    console.error('[DB] Error getting full sync state:', error);
-    throw error;
-  }
+  return {
+    wallets: getAllWallets(),
+    assets: getAllAssets(),
+    timestamp: Math.floor(Date.now() / 1000)
+  };
 }
 
 /**
@@ -494,51 +349,38 @@ export function getFullSyncState() {
  */
 export function replaceFullSyncState(data) {
   try {
-    // Use a transaction for atomic operation
-    const transaction = db.transaction(() => {
-      // Clear existing data
-      db.prepare('DELETE FROM assets').run();
-      db.prepare('DELETE FROM wallets').run();
-      
-      // Insert wallets
-      const insertWallet = db.prepare(`
-        INSERT INTO wallets (id, name, type, exchange_name, color, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      
-      for (const wallet of data.wallets || []) {
-        insertWallet.run(
-          wallet.id,
-          wallet.name,
-          wallet.type,
-          wallet.exchange_name || wallet.exchangeName || null,
-          wallet.color || null,
-          wallet.created_at || wallet.createdAt || Math.floor(Date.now() / 1000)
-        );
-      }
-      
-      // Insert assets
-      const insertAsset = db.prepare(`
-        INSERT INTO assets (id, wallet_id, symbol, amount, tags, notes, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      
-      for (const asset of data.assets || []) {
-        insertAsset.run(
-          asset.id,
-          asset.wallet_id || asset.walletId,
-          asset.symbol,
-          asset.amount,
-          asset.tags || null,
-          asset.notes || null,
-          asset.created_at || asset.createdAt || Math.floor(Date.now() / 1000),
-          asset.updated_at || asset.updatedAt || Math.floor(Date.now() / 1000)
-        );
-      }
-    });
+    // Clear existing data
+    db.data.wallets = [];
+    db.data.assets = [];
     
-    transaction();
-    console.log(`[DB] Sync complete: ${data.wallets?.length || 0} wallets, ${data.assets?.length || 0} assets`);
+    // Insert wallets
+    for (const wallet of data.wallets || []) {
+      db.data.wallets.push({
+        id: wallet.id,
+        name: wallet.name,
+        type: wallet.type,
+        exchange_name: wallet.exchange_name || wallet.exchangeName || null,
+        color: wallet.color || null,
+        created_at: wallet.created_at || wallet.createdAt || Math.floor(Date.now() / 1000)
+      });
+    }
+    
+    // Insert assets
+    for (const asset of data.assets || []) {
+      db.data.assets.push({
+        id: asset.id,
+        wallet_id: asset.wallet_id || asset.walletId,
+        symbol: asset.symbol,
+        amount: asset.amount,
+        tags: asset.tags || null,
+        notes: asset.notes || null,
+        created_at: asset.created_at || asset.createdAt || Math.floor(Date.now() / 1000),
+        updated_at: asset.updated_at || asset.updatedAt || Math.floor(Date.now() / 1000)
+      });
+    }
+    
+    db.save();
+    console.log(`[DB] Sync complete: ${db.data.wallets.length} wallets, ${db.data.assets.length} assets`);
     return true;
   } catch (error) {
     console.error('[DB] Error replacing sync state:', error);
@@ -547,12 +389,9 @@ export function replaceFullSyncState(data) {
 }
 
 /**
- * Close database connection
+ * Close database connection (for compatibility)
  */
 export function closeDatabase() {
-  if (db) {
-    console.log('[DB] Closing database connection...');
-    db.close();
-    db = null;
-  }
+  console.log('[DB] Saving final state...');
+  db.save();
 }
