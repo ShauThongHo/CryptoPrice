@@ -25,7 +25,9 @@ export function usePortfolioHistory(range: TimeRange) {
     // Fetch history data (now includes totalCount in single request)
     fetch(`${BACKEND_API_BASE}/portfolio/history?hours=${hours}`)
       .then(async (response) => {
+        console.log('[usePortfolioHistory] Response status:', response.status);
         const result = await response.json();
+        console.log('[usePortfolioHistory] Raw result:', result);
         
         if (result.success && result.data) {
           // Convert backend format to frontend format
@@ -38,7 +40,10 @@ export function usePortfolioHistory(range: TimeRange) {
           setHistory(converted);
           setCount(result.count);  // Data points in current range
           setTotalCount(result.totalCount || result.count);  // Total snapshots in DB
-          console.log(`[usePortfolioHistory] Loaded ${converted.length} snapshots in ${range} (${result.totalCount || result.count} total in DB)`);
+          console.log(`[usePortfolioHistory] ✅ Loaded ${converted.length} snapshots in ${range}`);
+          console.log(`[usePortfolioHistory] 📊 Count in range: ${result.count}, Total in DB: ${result.totalCount || result.count}`);
+        } else {
+          console.warn('[usePortfolioHistory] ⚠️ Invalid result:', result);
         }
       })
       .catch((error) => {

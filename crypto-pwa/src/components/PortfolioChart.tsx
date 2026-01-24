@@ -12,6 +12,15 @@ interface PortfolioChartProps {
 export default function PortfolioChart({ walletId }: PortfolioChartProps) {
   const [activeRange, setActiveRange] = useState<TimeRange>('24h');
   const { history, count, totalCount, isLoading } = usePortfolioHistory(activeRange);
+  
+  // Debug logging
+  console.log('[PortfolioChart] Render state:', { 
+    historyLength: history.length, 
+    count, 
+    totalCount, 
+    isLoading,
+    shouldShowChart: totalCount >= 2
+  });
 
   // Format data for recharts
   const chartData = history.map((snapshot) => {
@@ -60,11 +69,18 @@ export default function PortfolioChart({ walletId }: PortfolioChartProps) {
             Your portfolio history chart will appear here. 
             Server automatically saves snapshots every 5 minutes (kept for 30 days).
           </p>
-          {totalCount > 0 && (
-            <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-              {totalCount} snapshot{totalCount !== 1 ? 's' : ''} recorded so far
+          <div className="text-xs text-gray-500 dark:text-gray-500 mt-4 space-y-1">
+            <p>Debug Info:</p>
+            <p>• Total snapshots in DB: {totalCount}</p>
+            <p>• Snapshots in {activeRange}: {count}</p>
+            <p>• History array length: {history.length}</p>
+            <p>• Loading: {isLoading ? 'Yes' : 'No'}</p>
+            <p className="font-semibold mt-2">
+              {totalCount === 0 && 'Waiting for first snapshot...'}
+              {totalCount === 1 && 'Need 1 more snapshot to show chart'}
+              {totalCount >= 2 && '✅ Should show chart!'}
             </p>
-          )}
+          </div>
         </div>
       </div>
     );
