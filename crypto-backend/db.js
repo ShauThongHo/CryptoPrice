@@ -415,10 +415,10 @@ export function insertPortfolioSnapshot(timestamp, totalValue, snapshotData) {
     
     db.data.portfolio_history.push(record);
     
-    // Auto-prune: Keep only last 90 days
-    const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+    // Auto-prune: Keep only last 30 days (for 30-day chart)
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
     db.data.portfolio_history = db.data.portfolio_history.filter(
-      row => row.timestamp >= ninetyDaysAgo
+      row => row.timestamp >= thirtyDaysAgo
     );
     
     db.save();
@@ -459,7 +459,7 @@ export function getPortfolioHistoryCount() {
 /**
  * Clean up old portfolio history (keep last N days)
  */
-export function cleanupOldPortfolioHistory(daysToKeep = 90) {
+export function cleanupOldPortfolioHistory(daysToKeep = 30) {
   const cutoffTimestamp = Date.now() - (daysToKeep * 24 * 60 * 60 * 1000);
   const before = db.data.portfolio_history.length;
   db.data.portfolio_history = db.data.portfolio_history.filter(
@@ -469,7 +469,7 @@ export function cleanupOldPortfolioHistory(daysToKeep = 90) {
   
   if (before !== after) {
     db.save();
-    console.log(`[DB] Cleaned up portfolio history: ${before - after} old records removed`);
+    console.log(`[DB] 🗑️  Cleaned up portfolio history: ${before - after} old records removed (keeping last ${daysToKeep} days)`);
   }
   
   return before - after;

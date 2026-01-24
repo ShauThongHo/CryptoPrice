@@ -9,6 +9,7 @@ export function usePortfolioHistory(range: TimeRange) {
   const hours = range === '24h' ? 24 : range === '7d' ? 168 : 720; // 24h, 7d, 30d in hours
   const [history, setHistory] = useState<any[]>([]);
   const [count, setCount] = useState<number>(0);
+  const [totalCount, setTotalCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load from backend server (centralized calculation)
@@ -35,14 +36,16 @@ export function usePortfolioHistory(range: TimeRange) {
             snapshotData: item.snapshot_data
           }));
           setHistory(converted);
-          setCount(result.totalCount || result.count);  // Use totalCount from backend
-          console.log(`[usePortfolioHistory] Loaded ${converted.length} snapshots (${result.totalCount} total in DB)`);
+          setCount(result.count);  // Data points in current range
+          setTotalCount(result.totalCount || result.count);  // Total snapshots in DB
+          console.log(`[usePortfolioHistory] Loaded ${converted.length} snapshots in ${range} (${result.totalCount || result.count} total in DB)`);
         }
       })
       .catch((error) => {
         console.error('[usePortfolioHistory] Failed to load from backend:', error);
         setHistory([]);
         setCount(0);
+        setTotalCount(0);
       })
       .finally(() => {
         setIsLoading(false);
@@ -52,6 +55,7 @@ export function usePortfolioHistory(range: TimeRange) {
   return {
     history,
     count,
+    totalCount,
     isLoading,
   };
 }

@@ -96,6 +96,14 @@ cron.schedule(cronExpression, async () => {
   await calculateAndSavePortfolioSnapshot();
 });
 
+// Schedule daily cleanup of old portfolio history (at 3 AM)
+console.log('[CRON] 🗑️  Scheduling daily portfolio history cleanup at 3:00 AM');
+cron.schedule('0 3 * * *', () => {
+  console.log('[CRON] Running daily portfolio history cleanup...');
+  const removed = cleanupOldPortfolioHistory(30); // Keep last 30 days
+  console.log(`[CRON] Cleanup complete: ${removed} old snapshots removed`);
+});
+
 // Calculate and save portfolio snapshot based on current assets and prices
 async function calculateAndSavePortfolioSnapshot() {
   try {
@@ -177,7 +185,8 @@ async function calculateAndSavePortfolioSnapshot() {
     const success = insertPortfolioSnapshot(Date.now(), totalValue, snapshotData);
     
     if (success) {
-      console.log(`[PORTFOLIO] ✅ Snapshot saved: $${totalValue.toFixed(2)} (${matchedAssets}/${assets.length} assets with prices)`);
+      const totalSnapshots = getPortfolioHistoryCount();
+      console.log(`[PORTFOLIO] ✅ Snapshot saved: $${totalValue.toFixed(2)} (${matchedAssets}/${assets.length} assets with prices, ${totalSnapshots} total snapshots)`);
     } else {
       console.log('[PORTFOLIO] ❌ Failed to save snapshot');
     }

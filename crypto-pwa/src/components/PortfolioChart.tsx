@@ -11,7 +11,7 @@ interface PortfolioChartProps {
 
 export default function PortfolioChart({ walletId }: PortfolioChartProps) {
   const [activeRange, setActiveRange] = useState<TimeRange>('24h');
-  const { history, count, isLoading } = usePortfolioHistory(activeRange);
+  const { history, count, totalCount, isLoading } = usePortfolioHistory(activeRange);
 
   // Format data for recharts
   const chartData = history.map((snapshot) => {
@@ -40,8 +40,8 @@ export default function PortfolioChart({ walletId }: PortfolioChartProps) {
     { key: '30d', label: '30D' },
   ];
 
-  // Empty state: not enough data
-  if (count < 2) {
+  // Empty state: not enough data (use totalCount to check if we have any historical data)
+  if (totalCount < 2) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center gap-2 mb-4">
@@ -57,12 +57,12 @@ export default function PortfolioChart({ walletId }: PortfolioChartProps) {
             Building Your Chart
           </h4>
           <p className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
-            Your portfolio history chart will appear here as you use the app. 
-            We'll automatically capture snapshots every time prices are updated.
+            Your portfolio history chart will appear here. 
+            Server automatically saves snapshots every 5 minutes (kept for 30 days).
           </p>
-          {count > 0 && (
+          {totalCount > 0 && (
             <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-              {count} snapshot{count !== 1 ? 's' : ''} recorded so far
+              {totalCount} snapshot{totalCount !== 1 ? 's' : ''} recorded so far
             </p>
           )}
         </div>
