@@ -254,9 +254,72 @@ export function deleteWallet(id) {
 // ==================== ASSET OPERATIONS ====================
 
 /**
+ * Calculate and apply interest for all Earn/Staking assets
+ * This function checks each asset with earnConfig enabled and calculates interest based on:
+ * - Time elapsed since last payout
+ * - APY (Annual Percentage Yield)
+ * - Interest type (compound or simple)
+ * - Payout interval (e.g., daily = 24 hours)
+ */
+function calculateInterest() {
+  let updated = false;
+  const now = Date.now();
+  
+  db.data.assets.forEach(asset => {
+    // Only process assets with Earn configuration enabled
+    if (asset.earnConfig && asset.earnConfig.enabled) {
+      const config = asset.earnConfig;
+      
+      // Default to daily payout (24 hours) if not specified
+      const intervalHours = config.payoutIntervalHours || 24;
+      const intervalMs = intervalHours * 3600 * 1000;
+      
+      // Use last payout time, or creation time as fallback
+      const lastPayout = config.lastPayoutAt || (asset.created_at * 1000) || now;
+      const timeDiff = now - lastPayout;
+      
+      // Check if it's time to pay interest
+      if (timeDiff >= intervalMs) {
+        // Calculate how many periods passed (e.g., 2 days = 2 payouts)
+        const periodsPassed = Math.floor(timeDiff / intervalMs);
+        
+        if (periodsPassed > 0) {
+          const apyDecimal = config.apy / 100; // 5% -> 0.05
+          const ratePerPeriod = apyDecimal / (365 * (24 / intervalHours)); // Rate per interval
+          
+          let newAmount = asset.amount;
+          let interestEarned = 0;
+          
+          if (config.interestType === 'compound') {
+            // Compound interest: A = P * (1 + r)^n
+            newAmount = asset.amount * Math.pow((1 + ratePerPeriod), periodsPassed);
+            interestEarned = newAmount - asset.amount;
+          } else {
+            // Simple interest: I = P * r * n
+            interestEarned = asset.amount * ratePerPeriod * periodsPassed;
+            newAmount = asset.amount + interestEarned;
+          }
+          
+          // Apply interest with precision fix (avoid floating point errors)
+          asset.amount = parseFloat(newAmount.toFixed(8));
+          // Update last payout time (advance by exact periods to avoid drift)
+          asset.earnConfig.lastPayoutAt = lastPayout + (periodsPassed * intervalMs);
+          asset.updated_at = Math.floor(now / 1000);
+          
+          console.log(`[Earn] 💰 Paid ${interestEarned.toFixed(8)} ${asset.symbol} interest (${config.interestType}, APY ${config.apy}%)`);
+          updated = true;
+        }
+      }
+    }
+  });
+  
+  if (updated) db.save();
+}
+
+/**
  * Create a new asset
  */
-export function createAsset(walletId, symbol, amount, tags = null, notes = null) {
+export function createAsset(walletId, symbol, amount, tags = null, notes = null, earnConfig = null) {
   const now = Math.floor(Date.now() / 1000);
   const id = db.data.assets.length > 0 ? Math.max(...db.data.assets.map(a => a.id)) + 1 : 1;
   
@@ -270,6 +333,18 @@ export function createAsset(walletId, symbol, amount, tags = null, notes = null)
     created_at: now,
     updated_at: now
   };
+  
+  // Add earnConfig if provided (for Earn/Staking products)
+  if (earnConfig && earnConfig.enabled) {
+    asset.earnConfig = {
+      enabled: true,
+      apy: earnConfig.apy || 0,
+      interestType: earnConfig.interestType || 'compound', // 'compound' or 'simple'
+      payoutIntervalHours: earnConfig.payoutIntervalHours || 24, // Default daily
+      lastPayoutAt: Date.now() // Initialize to now
+    };
+    console.log(`[Earn] 📈 Created earn position: ${amount} ${symbol} @ ${earnConfig.apy}% APY (${earnConfig.interestType})`);
+  }
   
   db.data.assets.push(asset);
   db.save();
