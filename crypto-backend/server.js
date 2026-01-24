@@ -802,55 +802,6 @@ app.delete('/api/assets/:id', (req, res) => {
   }
 });
 
-// ==================== SPA CATCH-ALL ====================
-// This MUST be after all API routes but before 404 handler
-// Serves index.html for any route not matched above (React Router support)
-app.get('*', (req, res) => {
-  // Only serve index.html for non-API routes
-  if (!req.path.startsWith('/api') && 
-      !req.path.startsWith('/prices') && 
-      !req.path.startsWith('/history') && 
-      !req.path.startsWith('/status') && 
-      !req.path.startsWith('/health') && 
-      !req.path.startsWith('/coins') && 
-      !req.path.startsWith('/fetch') && 
-      !req.path.startsWith('/db')) {
-    const indexPath = path.join(__dirname, 'dist', 'index.html');
-    res.sendFile(indexPath, (err) => {
-      if (err) {
-        console.error('[SPA] Error serving index.html:', err);
-        res.status(404).json({
-          error: 'Frontend not deployed',
-          message: 'Run build-and-deploy script first',
-        });
-      }
-    });
-  } else {
-    // API routes that don't exist fall through to 404 handler
-    res.status(404).json({
-      error: 'API endpoint not found',
-      path: req.path,
-    });
-  }
-});
-
-// 404 handler (rarely hit now due to catch-all above)
-app.use((req, res) => {
-  res.status(404).json({
-    error: 'Not Found',
-    path: req.path
-  });
-});
-
-// Error handler
-app.use((err, req, res, next) => {
-  console.error('[ERROR]', err);
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: err.message
-  });
-});
-
 // ==================== EXCHANGE API KEY ENDPOINTS ====================
 
 // Save API key
@@ -1080,6 +1031,55 @@ app.get('/api/exchange/:exchange/balance', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// ==================== SPA CATCH-ALL ====================
+// This MUST be after all API routes but before 404 handler
+// Serves index.html for any route not matched above (React Router support)
+app.get('*', (req, res) => {
+  // Only serve index.html for non-API routes
+  if (!req.path.startsWith('/api') && 
+      !req.path.startsWith('/prices') && 
+      !req.path.startsWith('/history') && 
+      !req.path.startsWith('/status') && 
+      !req.path.startsWith('/health') && 
+      !req.path.startsWith('/coins') && 
+      !req.path.startsWith('/fetch') && 
+      !req.path.startsWith('/db')) {
+    const indexPath = path.join(__dirname, 'dist', 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        console.error('[SPA] Error serving index.html:', err);
+        res.status(404).json({
+          error: 'Frontend not deployed',
+          message: 'Run build-and-deploy script first',
+        });
+      }
+    });
+  } else {
+    // API routes that don't exist fall through to 404 handler
+    res.status(404).json({
+      error: 'API endpoint not found',
+      path: req.path,
+    });
+  }
+});
+
+// 404 handler (rarely hit now due to catch-all above)
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    path: req.path
+  });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('[ERROR]', err);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: err.message
+  });
 });
 
 // Start server
