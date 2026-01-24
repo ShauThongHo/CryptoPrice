@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { insertPriceHistory, upsertLatestPrice } from './db.js';
+import { insertPriceHistory, upsertLatestPrice, getAllAssets } from './db.js';
 
 const COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3';
 
@@ -164,3 +164,28 @@ export function removeTrackedCoin(coinId) {
   }
   return false;
 }
+
+// ==================== EARN INTEREST CALCULATOR ====================
+
+/**
+ * Background task: Calculate interest for all Earn/Staking positions
+ * Runs every hour to ensure timely payouts even when API is not accessed
+ */
+function startEarnCalculator() {
+  const CALC_INTERVAL = 60 * 60 * 1000; // 1 hour
+  
+  console.log('[EARN] 💰 Interest calculator started (runs hourly)');
+  
+  setInterval(() => {
+    try {
+      // Calling getAllAssets() triggers calculateInterest() internally
+      getAllAssets();
+      console.log('[EARN] ⏰ Hourly interest check completed');
+    } catch (error) {
+      console.error('[EARN] Error calculating interest:', error);
+    }
+  }, CALC_INTERVAL);
+}
+
+// Start the interest calculator
+startEarnCalculator();

@@ -725,7 +725,7 @@ app.get('/api/assets/:id', (req, res) => {
 // Create asset
 app.post('/api/assets', (req, res) => {
   try {
-    const { walletId, symbol, amount, tags, notes } = req.body;
+    const { walletId, symbol, amount, tags, notes, earnConfig } = req.body;
     
     if (!walletId || !symbol || amount === undefined) {
       return res.status(400).json({
@@ -734,7 +734,7 @@ app.post('/api/assets', (req, res) => {
       });
     }
     
-    const asset = createAsset(walletId, symbol, amount, tags, notes);
+    const asset = createAsset(walletId, symbol, amount, tags, notes, earnConfig);
     res.status(201).json({
       success: true,
       data: asset,

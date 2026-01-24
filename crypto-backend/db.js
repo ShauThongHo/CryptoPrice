@@ -278,9 +278,10 @@ export function createAsset(walletId, symbol, amount, tags = null, notes = null)
 }
 
 /**
- * Get all assets
+ * Get all assets (automatically calculates interest for Earn positions)
  */
 export function getAllAssets() {
+  calculateInterest(); // Auto-calculate interest before returning
   return [...db.data.assets].sort((a, b) => b.created_at - a.created_at);
 }
 
@@ -313,6 +314,7 @@ export function updateAsset(id, updates) {
   if (updates.amount !== undefined) asset.amount = updates.amount;
   if (updates.tags !== undefined) asset.tags = updates.tags;
   if (updates.notes !== undefined) asset.notes = updates.notes;
+  if (updates.earnConfig !== undefined) asset.earnConfig = updates.earnConfig;
   
   asset.updated_at = Math.floor(Date.now() / 1000);
   
