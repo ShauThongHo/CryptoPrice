@@ -15,7 +15,8 @@ const db = {
         latest_prices: {},
         wallets: [],
         assets: [],
-        portfolio_history: []  // New: Portfolio snapshots
+        portfolio_history: [],  // Portfolio snapshots
+        api_keys: []  // New: Encrypted API keys for exchanges
     },
 
     // Load data from disk
@@ -473,4 +474,67 @@ export function cleanupOldPortfolioHistory(daysToKeep = 30) {
   }
   
   return before - after;
+}
+
+// ==================== API KEY OPERATIONS ====================
+
+/**
+ * Create API key record for an exchange
+ */
+export function createApiKey(exchange, apiKey, apiSecret, password = null) {
+  const record = {
+    id: Date.now(),
+    exchange,
+    apiKey,
+    apiSecret,
+    password,  // Optional passphrase for exchanges like OKX
+    createdAt: Date.now(),
+    lastUsed: null
+  };
+  db.data.api_keys.push(record);
+  db.save();
+  console.log(`[DB] ➕ API key added for ${exchange}`);
+  return record;
+}
+
+/**
+ * Get all API keys
+ */
+export function getAllApiKeys() {
+  return db.data.api_keys;
+}
+
+/**
+ * Get API key by exchange name
+ */
+export function getApiKeyByExchange(exchange) {
+  return db.data.api_keys.find(k => k.exchange.toLowerCase() === exchange.toLowerCase());
+}
+
+/**
+ * Update API key
+ */
+export function updateApiKey(id, updates) {
+  const index = db.data.api_keys.findIndex(k => k.id === id);
+  if (index === -1) return false;
+  
+  db.data.api_keys[index] = { ...db.data.api_keys[index], ...updates };
+  db.save();
+  console.log(`[DB] 🔄 API key ${id} updated`);
+  return true;
+}
+
+/**
+ * Delete API key
+ */
+export function deleteApiKey(id) {
+  const before = db.data.api_keys.length;
+  db.data.api_keys = db.data.api_keys.filter(k => k.id !== id);
+  
+  if (db.data.api_keys.length < before) {
+    db.save();
+    console.log(`[DB] 🗑️  API key ${id} deleted`);
+    return true;
+  }
+  return false;
 }

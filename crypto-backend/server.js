@@ -4,6 +4,7 @@ import cron from 'node-cron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import ccxt from 'ccxt';
 import { 
   initDatabase, 
   closeDatabase, 
@@ -31,7 +32,13 @@ import {
   getPortfolioHistory,
   getRecentPortfolioHistory,
   getPortfolioHistoryCount,
-  cleanupOldPortfolioHistory
+  cleanupOldPortfolioHistory,
+  // API key operations
+  createApiKey,
+  getAllApiKeys,
+  getApiKeyByExchange,
+  updateApiKey,
+  deleteApiKey
 } from './db.js';
 import { updatePrices, getTrackedCoins } from './fetcher.js';
 
@@ -842,6 +849,237 @@ app.use((err, req, res, next) => {
     error: 'Internal Server Error',
     message: err.message
   });
+});
+
+// ==================== EXCHANGE API KEY ENDPOINTS ====================
+
+// Save API key
+app.post('/api/exchange/apikey', (req, res) => {
+  try {
+    const { exchange, apiKey, apiSecret, password } = req.body;
+    
+    if (!exchange || !apiKey || !apiSecret) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: exchange, apiKey, apiSecret'
+      });
+    }
+    
+    // Check if API key already exists for this exchange
+    const existing = getApiKeyByExchange(exchange);
+    if (existing) {
+      // Update existing
+      updateApiKey(existing.id, { apiKey, apiSecret, password });
+      console.log(`[SERVER] 🔑 Updated API key for ${exchange}`);
+      return res.json({
+        success: true,
+        message: 'API key updated',
+        exchange
+      });
+    } else {
+      // Create new
+      const record = createApiKey(exchange, apiKey, apiSecret, password);
+      console.log(`[SERVER] 🔑 Saved API key for ${exchange}`);
+      return res.status(201).json({
+        success: true,
+        message: 'API key saved',
+        exchange,
+        id: record.id
+      });
+    }
+  } catch (error) {
+    console.error('[SERVER] Error saving API key:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Get list of exchanges with API keys (without exposing keys)
+app.get('/api/exchange/list', (req, res) => {
+  try {
+    const keys = getAllApiKeys();
+    const list = keys.map(k => ({
+      id: k.id,
+      exchange: k.exchange,
+      createdAt: k.createdAt,
+      lastUsed: k.lastUsed
+    }));
+    
+    res.json({
+      success: true,
+      count: list.length,
+      data: list
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Delete API key
+app.delete('/api/exchange/apikey/:exchange', (req, res) => {
+  try {
+    const { exchange } = req.params;
+    const record = getApiKeyByExchange(exchange);
+    
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        error: 'API key not found'
+      });
+    }
+    
+    deleteApiKey(record.id);
+    console.log(`[SERVER] 🗑️  Deleted API key for ${exchange}`);
+    
+    res.json({
+      success: true,
+      message: 'API key deleted'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Fetch exchange balances (OKX-specific handling)
+app.get('/api/exchange/:exchange/balance', async (req, res) => {
+  try {
+    const { exchange: exchangeName } = req.params;
+    
+    console.log(`[SERVER] 📊 Fetching balance for ${exchangeName}...`);
+    
+    // Get API key from database
+    const apiKeyRecord = getApiKeyByExchange(exchangeName);
+    if (!apiKeyRecord) {
+      return res.status(404).json({
+        success: false,
+        error: `No API key found for ${exchangeName}`
+      });
+    }
+    
+    // Initialize exchange
+    const ExchangeClass = ccxt[exchangeName];
+    if (!ExchangeClass) {
+      return res.status(400).json({
+        success: false,
+        error: `Exchange ${exchangeName} not supported`
+      });
+    }
+    
+    const exchangeConfig = {
+      apiKey: apiKeyRecord.apiKey,
+      secret: apiKeyRecord.apiSecret,
+      enableRateLimit: true
+    };
+    
+    if (apiKeyRecord.password) {
+      exchangeConfig.password = apiKeyRecord.password;
+    }
+    
+    const exchangeInstance = new ExchangeClass(exchangeConfig);
+    const balances = [];
+    
+    // OKX-specific: fetch from multiple account types
+    if (exchangeName.toLowerCase() === 'okx') {
+      console.log('[SERVER] [OKX] Fetching from trading and funding accounts...');
+      
+      // Trading account (default)
+      try {
+        console.log('[SERVER] [OKX] Fetching trading account...');
+        const tradingBalance = await exchangeInstance.fetchBalance();
+        console.log('[SERVER] [OKX] Trading balance:', JSON.stringify(tradingBalance.total));
+        
+        for (const [currency, total] of Object.entries(tradingBalance.total || {})) {
+          if (total > 0) {
+            balances.push({
+              symbol: currency,
+              free: tradingBalance.free[currency] || 0,
+              used: tradingBalance.used[currency] || 0,
+              total: total,
+              account: 'trading'
+            });
+            console.log(`[SERVER] [OKX]   ✓ ${currency}: ${total} (trading)`);
+          }
+        }
+      } catch (err) {
+        console.error('[SERVER] [OKX] Trading account error:', err.message);
+      }
+      
+      // Funding account
+      try {
+        console.log('[SERVER] [OKX] Fetching funding account...');
+        const fundingBalance = await exchangeInstance.fetchBalance({ type: 'funding' });
+        console.log('[SERVER] [OKX] Funding balance:', JSON.stringify(fundingBalance.total));
+        
+        for (const [currency, total] of Object.entries(fundingBalance.total || {})) {
+          if (total > 0) {
+            const existing = balances.find(b => b.symbol === currency);
+            if (existing) {
+              existing.free += fundingBalance.free[currency] || 0;
+              existing.used += fundingBalance.used[currency] || 0;
+              existing.total += total;
+              existing.account = 'trading+funding';
+              console.log(`[SERVER] [OKX]   ✓ ${currency}: ${total} (funding) - merged`);
+            } else {
+              balances.push({
+                symbol: currency,
+                free: fundingBalance.free[currency] || 0,
+                used: fundingBalance.used[currency] || 0,
+                total: total,
+                account: 'funding'
+              });
+              console.log(`[SERVER] [OKX]   ✓ ${currency}: ${total} (funding)`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[SERVER] [OKX] Funding account error:', err.message);
+      }
+      
+      console.log(`[SERVER] [OKX] Total unique assets: ${balances.length}`);
+    } else {
+      // Standard exchange balance fetch
+      const balance = await exchangeInstance.fetchBalance();
+      
+      for (const [currency, total] of Object.entries(balance.total || {})) {
+        if (total > 0) {
+          balances.push({
+            symbol: currency,
+            free: balance.free[currency] || 0,
+            used: balance.used[currency] || 0,
+            total: total
+          });
+        }
+      }
+    }
+    
+    // Update last used timestamp
+    updateApiKey(apiKeyRecord.id, { lastUsed: Date.now() });
+    
+    console.log(`[SERVER] ✅ Found ${balances.length} assets for ${exchangeName}`);
+    
+    res.json({
+      success: true,
+      exchange: exchangeName,
+      count: balances.length,
+      data: balances,
+      timestamp: Date.now()
+    });
+    
+  } catch (error) {
+    console.error(`[SERVER] Error fetching balance:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Start server
