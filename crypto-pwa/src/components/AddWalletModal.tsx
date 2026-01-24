@@ -139,9 +139,9 @@ export default function AddWalletModal({ isOpen, onClose, onAdd }: AddWalletModa
       className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl w-full max-w-mobile sm:max-w-md max-h-[90vh] overflow-y-auto animate-slide-up">
-        {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 p-6 pb-4 border-b border-gray-200 dark:border-gray-700 z-10">
+      <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl w-full max-w-mobile sm:max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-slide-up">
+        {/* Header - Fixed */}
+        <div className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Add Wallet</h2>
             <button
@@ -181,10 +181,11 @@ export default function AddWalletModal({ isOpen, onClose, onAdd }: AddWalletModa
           </div>
         </div>
 
-        <div className="p-6">
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6">
           {/* API Connection Tab */}
           {activeTab === 'api' && (
-            <form onSubmit={handleApiSubmit} className="space-y-4">
+            <form onSubmit={handleApiSubmit} className="space-y-4" id="api-form">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Wallet Name *
@@ -325,19 +326,22 @@ export default function AddWalletModal({ isOpen, onClose, onAdd }: AddWalletModa
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {isSubmitting ? 'Adding...' : 'Add Wallet & Save API Key'}
-              </button>
+              {/* Footer - Fixed */}
+              <div className="sticky bottom-0 bg-white dark:bg-gray-800 pt-4">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  {isSubmitting ? 'Adding...' : 'Add Wallet & Save API Key'}
+                </button>
+              </div>
             </form>
           )}
 
           {/* Manual Entry Tab */}
           {activeTab === 'manual' && (
-            <form onSubmit={handleManualSubmit} className="space-y-4">
+            <form onSubmit={handleManualSubmit} className="space-y-4" id="manual-form">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Wallet Name *
@@ -380,13 +384,16 @@ export default function AddWalletModal({ isOpen, onClose, onAdd }: AddWalletModa
                 </p>
               </div>
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {isSubmitting ? 'Adding...' : 'Add Wallet'}
-              </button>
+              {/* Footer - Fixed */}
+              <div className="sticky bottom-0 bg-white dark:bg-gray-800 pt-4">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  {isSubmitting ? 'Adding...' : 'Add Wallet'}
+                </button>
+              </div>
             </form>
           )}
         </div>

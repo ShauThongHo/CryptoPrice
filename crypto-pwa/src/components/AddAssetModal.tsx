@@ -62,9 +62,9 @@ export default function AddAssetModal({ isOpen, onClose, wallets, onAdd, presele
       className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl w-full max-w-mobile sm:max-w-md p-6 animate-slide-up">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl w-full max-w-mobile sm:max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-slide-up">
+        {/* Header - Fixed */}
+        <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Add Asset</h2>
           <button
             onClick={onClose}
@@ -75,7 +75,8 @@ export default function AddAssetModal({ isOpen, onClose, wallets, onAdd, presele
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {!preselectedWalletId && (
             <div>
               <label htmlFor="asset-wallet" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -168,23 +169,26 @@ export default function AddAssetModal({ isOpen, onClose, wallets, onAdd, presele
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
             />
           </div>
+          </div>
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || !walletId || !symbol.trim() || !amount || parseFloat(amount) <= 0}
-              className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? 'Adding...' : 'Add Asset'}
-            </button>
+          {/* Footer - Fixed */}
+          <div className="p-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting || !walletId || !symbol.trim() || !amount || parseFloat(amount) <= 0}
+                className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Adding...' : 'Add Asset'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
