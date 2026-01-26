@@ -147,6 +147,16 @@ async function calculateAndSavePortfolioSnapshot() {
       'MATIC': 'matic-network',
     };
     
+    // Stablecoin fallback prices (when CoinGecko fails)
+    const STABLECOIN_FALLBACK = {
+      'USDT': 1.0,
+      'USDC': 1.0,
+      'DAI': 1.0,
+      'XDAI': 1.0,
+      'BUSD': 1.0,
+      'TUSD': 1.0,
+    };
+    
     // Create price lookup map
     const priceMap = {};
     for (const priceRow of prices) {
@@ -162,7 +172,13 @@ async function calculateAndSavePortfolioSnapshot() {
     for (const asset of assets) {
       const symbolUpper = asset.symbol.toUpperCase();
       const coinId = SYMBOL_TO_ID_MAP[symbolUpper] || asset.symbol.toLowerCase();
-      const price = priceMap[coinId] || 0;
+      let price = priceMap[coinId] || 0;
+      
+      // Fallback: Use $1 for stablecoins if price not found
+      if (price === 0 && STABLECOIN_FALLBACK[symbolUpper]) {
+        price = STABLECOIN_FALLBACK[symbolUpper];
+        console.log(`[PORTFOLIO] 💵 Using fallback price for ${symbolUpper}: $${price}`);
+      }
       
       if (price > 0) {
         matchedAssets++;
