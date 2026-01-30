@@ -38,9 +38,10 @@ import {
   getAllApiKeys,
   getApiKeyByExchange,
   updateApiKey,
-  deleteApiKey
+  deleteApiKey,
+  getAllTrackedCoinIds
 } from './db.js';
-import { updatePrices, getTrackedCoins } from './fetcher.js';
+import { updatePrices } from './fetcher.js';
 
 // ES Module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -500,7 +501,7 @@ app.get('/portfolio/history/count', (req, res) => {
 // Phase 3: Fetcher management endpoints
 app.get('/coins', (req, res) => {
   try {
-    const coins = getTrackedCoins();
+    const coins = getAllTrackedCoinIds();
     res.json({
       success: true,
       count: coins.length,
