@@ -16,7 +16,8 @@ const db = {
         wallets: [],
         assets: [],
         portfolio_history: [],  // Portfolio snapshots
-        api_keys: []  // New: Encrypted API keys for exchanges
+        api_keys: [],  // Encrypted API keys for exchanges
+        custom_coins: []  // User-added custom coins
     },
 
     // Load data from disk
@@ -419,6 +420,7 @@ export function getFullSyncState() {
   return {
     wallets: getAllWallets(),
     assets: getAllAssets(),
+    customCoins: getAllCustomCoins(),
     timestamp: Math.floor(Date.now() / 1000)
   };
 }
@@ -431,6 +433,7 @@ export function replaceFullSyncState(data) {
     // Clear existing data
     db.data.wallets = [];
     db.data.assets = [];
+    db.data.custom_coins = [];
     
     // Insert wallets
     for (const wallet of data.wallets || []) {
@@ -458,8 +461,20 @@ export function replaceFullSyncState(data) {
       });
     }
     
+    // Insert custom coins
+    for (const coin of data.customCoins || []) {
+      db.data.custom_coins.push({
+        id: coin.id,
+        symbol: coin.symbol,
+        name: coin.name,
+        coin_gecko_id: coin.coin_gecko_id || coin.coinGeckoId,
+        is_custom: coin.is_custom !== undefined ? coin.is_custom : true,
+        created_at: coin.created_at || coin.createdAt || Math.floor(Date.now() / 1000)
+      });
+    }
+    
     db.save();
-    console.log(`[DB] Sync complete: ${db.data.wallets.length} wallets, ${db.data.assets.length} assets`);
+    console.log(`[DB] Sync complete: ${db.data.wallets.length} wallets, ${db.data.assets.length} assets, ${db.data.custom_coins.length} custom coins`);
     return true;
   } catch (error) {
     console.error('[DB] Error replacing sync state:', error);
@@ -551,6 +566,55 @@ export function cleanupOldPortfolioHistory(daysToKeep = 30) {
   }
   
   return before - after;
+}
+
+// ==================== CUSTOM COINS OPERATIONS ====================
+
+/**
+ * Get all custom coins
+ */
+export function getAllCustomCoins() {
+  return [...db.data.custom_coins].sort((a, b) => b.created_at - a.created_at);
+}
+
+/**
+ * Create custom coin
+ */
+export function createCustomCoin(symbol, name, coinGeckoId) {
+  try {
+    const coin = {
+      id: Date.now(),
+      symbol: symbol,
+      name: name,
+      coin_gecko_id: coinGeckoId,
+      is_custom: true,
+      created_at: Date.now()
+    };
+    
+    db.data.custom_coins.push(coin);
+    db.save();
+    return coin;
+  } catch (error) {
+    console.error('[DB] Error creating custom coin:', error);
+    return null;
+  }
+}
+
+/**
+ * Delete custom coin
+ */
+export function deleteCustomCoin(id) {
+  try {
+    const index = db.data.custom_coins.findIndex(c => c.id === id);
+    if (index === -1) return false;
+    
+    db.data.custom_coins.splice(index, 1);
+    db.save();
+    return true;
+  } catch (error) {
+    console.error('[DB] Error deleting custom coin:', error);
+    return false;
+  }
 }
 
 // ==================== API KEY OPERATIONS ====================
