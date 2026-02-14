@@ -69,31 +69,45 @@ export function useExchangeSync() {
           .where('walletId').equals(wallet.id)
           .toArray();
         
-        // Update or create assets
+        // Update or create assets (only auto-sync assets)
         for (const balance of exchangeBalances) {
           if (balance.total <= 0) continue;
           
-          const existing = existingAssets.find(a => a.symbol === balance.symbol);
+          // Find existing auto-synced asset (must have autoSync = true)
+          const existing = existingAssets.find(a => 
+            a.symbol === balance.symbol && 
+            a.autoSync === true
+          );
           
           if (existing && existing.id) {
-            // Update existing asset
+            // Update existing auto-synced asset
             await db.assets.update(existing.id, {
               amount: balance.total,
               updatedAt: new Date(),
             });
             console.log(`[ExchangeSync] ✏️ 更新資產: ${balance.symbol} = ${balance.total}`);
-          } else {
-            // Create new asset
+          } else if (!existing) {
+            // Check if there's a non-auto-sync asset with same symbol
+            const manualAsset = existingAssets.find(a => 
+              a.symbol === balance.symbol && 
+              !a.autoSync
+            );
+            
+            if (manualAsset) {
+              console.log(`[ExchangeSync] ⚠️ 跳過 ${balance.symbol}: 已有手動添加的資產`);
+              continue;
+            }
+            
+            // Create new auto-sync asset
             await db.assets.add({
               walletId: wallet.id,
               symbol: balance.symbol,
               amount: balance.total,
-              tags: 'exchange',
-              notes: `Auto-imported from ${exchange}`,
+              autoSync: true,
               createdAt: new Date(),
               updatedAt: new Date(),
             });
-            console.log(`[ExchangeSync] ➕ 新增資產: ${balance.symbol} = ${balance.total}`);
+            console.log(`[ExchangeSync] ➕ 新增資產: ${balance.symbol} = ${balance.total} (auto-sync)`);
           }
         }
       }
