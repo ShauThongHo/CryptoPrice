@@ -105,6 +105,7 @@ export function usePortfolioValue() {
   const { prices } = usePrices(); // Add this to trigger recalculation when prices update
   const [totalValue, setTotalValue] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   const [valueBySymbol, setValueBySymbol] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
@@ -116,11 +117,16 @@ export function usePortfolioValue() {
           setTotalValue(0);
           setValueBySymbol(new Map());
           setIsLoading(false);
+          if (!hasInitiallyLoaded) setHasInitiallyLoaded(true);
         }
         return;
       }
 
-      setIsLoading(true);
+      // Only show loading on initial load, silently update afterwards
+      if (!hasInitiallyLoaded) {
+        setIsLoading(true);
+      }
+      
       let total = 0;
       const symbolValues = new Map<string, number>();
 
@@ -147,6 +153,7 @@ export function usePortfolioValue() {
         setTotalValue(total);
         setValueBySymbol(symbolValues);
         setIsLoading(false);
+        if (!hasInitiallyLoaded) setHasInitiallyLoaded(true);
       }
     }
 
@@ -155,12 +162,12 @@ export function usePortfolioValue() {
     return () => {
       mounted = false;
     };
-  }, [assets, prices]); // Add prices as dependency
+  }, [assets, prices, hasInitiallyLoaded]); // Add hasInitiallyLoaded to dependencies
 
   return {
     totalValue,
     valueBySymbol,
-    isLoading,
+    isLoading: isLoading && !hasInitiallyLoaded, // Only show loading on initial load
     hasAssets: assets.length > 0,
   };
 }

@@ -28,6 +28,14 @@ export default function Dashboard() {
   const [coinAggregates, setCoinAggregates] = useState<Map<string, { amount: number; value: number }>>(new Map());
   const [selectedWallet, setSelectedWallet] = useState<WalletType | null>(null);
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
+
+  // Track initial load completion
+  useEffect(() => {
+    if (!isLoading && !hasInitiallyLoaded) {
+      setHasInitiallyLoaded(true);
+    }
+  }, [isLoading, hasInitiallyLoaded]);
 
   // Calculate wallet values and coin aggregates
   useEffect(() => {
@@ -102,7 +110,8 @@ export default function Dashboard() {
     refreshPrices();
   }, [canRefresh, hasAssets, syncingPrices, refreshPrices]);
 
-  if (isLoading) {
+  // Only show skeleton on initial load, not on subsequent updates
+  if (isLoading && !hasInitiallyLoaded) {
     return <DashboardSkeleton />;
   }
 
