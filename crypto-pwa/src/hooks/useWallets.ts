@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, dbOperations, type Wallet } from '../db/db';
 import { syncService } from '../services/syncService';
+import React from 'react';
 
 /**
  * Hook to get all wallets with live reactivity
@@ -8,10 +9,17 @@ import { syncService } from '../services/syncService';
  */
 export function useWallets() {
   const wallets = useLiveQuery(() => db.wallets.toArray(), []);
+  const [hasLoaded, setHasLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    if (wallets !== undefined && !hasLoaded) {
+      setHasLoaded(true);
+    }
+  }, [wallets, hasLoaded]);
 
   return {
     wallets: wallets ?? [],
-    isLoading: wallets === undefined,
+    isLoading: wallets === undefined && !hasLoaded,
   };
 }
 

@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, dbOperations, type Asset } from '../db/db';
 import { syncService } from '../services/syncService';
+import React from 'react';
 
 export { useWallets } from './useWallets';
 
@@ -10,10 +11,17 @@ export { useWallets } from './useWallets';
  */
 export function useAssets() {
   const assets = useLiveQuery(() => db.assets.toArray(), []);
+  const [hasLoaded, setHasLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    if (assets !== undefined && !hasLoaded) {
+      setHasLoaded(true);
+    }
+  }, [assets, hasLoaded]);
 
   return {
     assets: assets ?? [],
-    isLoading: assets === undefined,
+    isLoading: assets === undefined && !hasLoaded,
   };
 }
 
@@ -136,6 +144,13 @@ export function useAssetOperations() {
 export function usePortfolioSummary() {
   const assets = useLiveQuery(() => db.assets.toArray(), []);
   const wallets = useLiveQuery(() => db.wallets.toArray(), []);
+  const [hasLoaded, setHasLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    if (assets !== undefined && wallets !== undefined && !hasLoaded) {
+      setHasLoaded(true);
+    }
+  }, [assets, wallets, hasLoaded]);
 
   // Group assets by symbol and calculate total amounts
   const assetSummary = assets?.reduce(
@@ -162,6 +177,6 @@ export function usePortfolioSummary() {
     totalWallets: wallets?.length ?? 0,
     assetSummary: assetSummary ? Object.values(assetSummary) : [],
     assets: assets ?? [],
-    isLoading: assets === undefined || wallets === undefined,
+    isLoading: (assets === undefined || wallets === undefined) && !hasLoaded,
   };
 }
